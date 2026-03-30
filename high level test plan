@@ -1,0 +1,410 @@
+# Bogey v1 — System Test Plan
+version: 1.0.0  
+status: Locked
+
+This document defines the complete, deterministic, adversarial test plan for validating Bogey v1 against its system requirements (SR‑001 → SR‑024).  
+All tests are designed to be reproducible in a Kaggle environment.
+
+---
+
+# 1. Test Philosophy
+
+Bogey v1 is a deterministic, dataset‑driven system.  
+Therefore, the test plan emphasizes:
+
+- deterministic reconstruction  
+- canonical/sandbox separation  
+- explicit ingestion  
+- no inference  
+- no automation  
+- strict recovery semantics  
+- observability and introspection  
+- safety under corruption  
+- safety under partial failure  
+
+Every test must be runnable in isolation and must not depend on previous state.
+
+---
+
+# 2. Test Categories
+
+1. Startup & Determinism  
+2. Canonical/Sandbox Separation  
+3. Registry Behavior  
+4. Reconstruction & Recovery  
+5. Ingestion (Canonical + Manager‑Driven)  
+6. No‑Inference Guarantees  
+7. Observability & Introspection  
+8. Disk‑Pressure Behavior  
+9. Negative & Adversarial Tests  
+10. End‑to‑End Scenarios
+
+---
+
+# 3. Test Cases
+
+## **TC‑001 — Deterministic Startup (SR‑001)**
+**Preconditions:**  
+- Clean dataset with known canonical artifacts  
+- Empty sandbox  
+
+**Steps:**  
+1. Start Bogey.  
+2. Capture sandbox state.  
+3. Restart Bogey.  
+4. Capture sandbox state again.  
+
+**Expected:**  
+- Both runs produce byte‑identical sandbox structure.  
+- Registry identical across runs.  
+- Logs show deterministic reconstruction.
+
+---
+
+## **TC‑002 — Canonical/Sandbox Separation (SR‑002)**
+**Steps:**  
+1. Inspect canonical dataset directory.  
+2. Inspect sandbox directory.  
+
+**Expected:**  
+- No large binaries in sandbox.  
+- All large binaries exist only in canonical dataset.  
+- Sandbox contains only symlinks and small metadata.
+
+---
+
+## **TC‑003 — No Recursive Scanning (SR‑003, SR‑015)**
+**Steps:**  
+1. Create nested directories under sandbox with fake models.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey ignores nested directories.  
+- No registry entries created.  
+- No ingestion triggered.
+
+---
+
+## **TC‑004 — Explicit Artifact Declaration Only (SR‑004)**
+**Steps:**  
+1. Place an undeclared model file in canonical storage.  
+2. Start Bogey.  
+
+**Expected:**  
+- Fatal error: undeclared canonical artifact.  
+- No inference.  
+- No registry entry created.
+
+---
+
+## **TC‑005 — Symlink‑Only Population (SR‑005)**
+**Steps:**  
+1. Start Bogey.  
+2. Inspect ComfyUI model directories.  
+
+**Expected:**  
+- All entries are symlinks.  
+- No large files physically present.
+
+---
+
+## **TC‑006 — No Filesystem Inference (SR‑006, SR‑014)**
+**Steps:**  
+1. Rename a model file to a misleading name.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey does not infer type from filename.  
+- Bogey uses registry metadata only.  
+- No behavior change.
+
+---
+
+## **TC‑007 — Registry Metadata Only (SR‑007)**
+**Steps:**  
+1. Inspect registry file.  
+
+**Expected:**  
+- No binary data.  
+- Only metadata fields defined in architecture.
+
+---
+
+## **TC‑008 — Registry Persistence (SR‑008)**
+**Steps:**  
+1. Start Bogey.  
+2. Modify registry (add entry).  
+3. Restart Bogey.  
+
+**Expected:**  
+- Registry persists across sessions.  
+- Bogey validates registry on startup.
+
+---
+
+## **TC‑009 — Canonical Is Authoritative (SR‑009)**
+**Steps:**  
+1. Modify sandbox symlink target.  
+2. Restart Bogey.  
+
+**Expected:**  
+- Bogey restores sandbox from canonical.  
+- Sandbox modifications are overwritten.
+
+---
+
+## **TC‑010 — Deterministic Reconstruction (SR‑010)**
+**Steps:**  
+1. Delete sandbox entirely.  
+2. Start Bogey.  
+
+**Expected:**  
+- Sandbox fully reconstructed.  
+- No missing artifacts.  
+- No inference.
+
+---
+
+## **TC‑011 — No Resurrection Without Data (SR‑011)**
+**Steps:**  
+1. Delete a canonical artifact.  
+2. Start Bogey.  
+
+**Expected:**  
+- Fatal error.  
+- No reconstruction attempt.  
+- No guessing.
+
+---
+
+## **TC‑012 — Tombstone Preservation (SR‑012)**
+**Steps:**  
+1. Mark an artifact as deleted (tombstone).  
+2. Start Bogey.  
+
+**Expected:**  
+- Artifact not reconstructed.  
+- No symlink created.  
+- Tombstone honored.
+
+---
+
+## **TC‑013 — Hash Verification (SR‑013)**
+**Steps:**  
+1. Corrupt a canonical artifact.  
+2. Start Bogey.  
+
+**Expected:**  
+- Hash mismatch detected.  
+- Fatal error.  
+- No reconstruction.
+
+---
+
+## **TC‑014 — Single‑Pass Recovery (SR‑016)**
+**Steps:**  
+1. Corrupt sandbox.  
+2. Start Bogey.  
+3. Observe recovery.  
+4. Restart Bogey.  
+
+**Expected:**  
+- First run: recovery executes once.  
+- Second run: no recovery triggered.  
+- Loop‑breaker prevents repeated recovery.
+
+---
+
+## **TC‑015 — Structured Logging (SR‑017)**
+**Steps:**  
+1. Start Bogey.  
+2. Inspect log file.  
+
+**Expected:**  
+- JSON‑lines format.  
+- One event per line.  
+- Includes timestamps, event types, artifact IDs.
+
+---
+
+## **TC‑016 — Introspection API (SR‑018)**
+**Steps:**  
+1. Run `bogey status`.  
+2. Run `bogey explain <artifact>`.  
+3. Run `bogey diff <artifact>`.  
+4. Run `bogey verify`.  
+
+**Expected:**  
+- All commands succeed.  
+- No mutation of state.  
+- Output matches registry + canonical.
+
+---
+
+## **TC‑017 — Disk‑Pressure Warnings (SR‑019)**
+**Steps:**  
+1. Fill /kaggle/working to 91%.  
+2. Start Bogey.  
+3. Fill to 96%.  
+4. Start Bogey.  
+
+**Expected:**  
+- 91%: soft warning emitted.  
+- 96%: hard warning emitted.  
+- No crashes.
+
+---
+
+## **TC‑018 — Canonical Upstream Acquisition (SR‑020)**
+**Steps:**  
+1. Declare upstream URL for a model.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey downloads artifact.  
+- Hash verified.  
+- Artifact stored in canonical dataset.  
+- Registry updated.
+
+---
+
+## **TC‑019 — Manager‑Driven Ingestion (SR‑021)**
+**Steps:**  
+1. Use ComfyUI‑Manager to download a model.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey detects new file.  
+- Ingests into canonical.  
+- Creates symlink.  
+- Updates registry.
+
+---
+
+## **TC‑020 — No Inference‑Based Acquisition (SR‑022)**
+**Steps:**  
+1. Create workflow referencing missing model.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey does not download anything.  
+- Fatal error or clear message.  
+- No inference.
+
+---
+
+## **TC‑021 — No Automatic Updates (SR‑023)**
+**Steps:**  
+1. Change upstream version.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey does not detect update.  
+- Bogey does not download update.  
+- No registry changes.
+
+---
+
+## **TC‑022 — No Environment Automation (SR‑024)**
+**Steps:**  
+1. Remove a Python dependency.  
+2. Start Bogey.  
+
+**Expected:**  
+- Bogey does not attempt repair.  
+- Clear error message.
+
+---
+
+# 4. Adversarial Tests
+
+## **AT‑001 — Corrupt Registry**
+Bogey must detect and reject malformed registry entries.
+
+## **AT‑002 — Partial Ingestion**
+Bogey must detect incomplete ingestion and refuse reconstruction.
+
+## **AT‑003 — Broken Symlinks**
+Bogey must detect broken symlinks and repair them deterministically.
+
+## **AT‑004 — Mixed Canonical/Sandbox State**
+Bogey must reject environments where sandbox contains undeclared artifacts.
+
+## **AT‑005 — Hash Collision Simulation**
+Bogey must treat mismatched hashes as fatal even if filenames match.
+
+---
+
+# 5. End‑to‑End Scenarios
+
+## **E2E‑001 — Fresh Install**
+- No sandbox  
+- No registry  
+- Canonical dataset present  
+- Expected: full reconstruction
+
+## **E2E‑002 — User Adds Model via Upstream**
+- Declare upstream  
+- Start Bogey  
+- Expected: acquisition + ingestion + symlink
+
+## **E2E‑003 — User Adds Model via Manager**
+- Manager download  
+- Start Bogey  
+- Expected: ingestion + symlink
+
+## **E2E‑004 — Corruption + Recovery**
+- Corrupt sandbox  
+- Start Bogey  
+- Expected: single‑pass recovery
+
+## **E2E‑005 — Canonical Corruption**
+- Corrupt canonical artifact  
+- Start Bogey  
+- Expected: fatal error, no reconstruction
+
+---
+
+# 6. Coverage Matrix
+
+Each SR‑xxx requirement is covered by at least one test case:
+
+- SR‑001 → TC‑001  
+- SR‑002 → TC‑002  
+- SR‑003 → TC‑003  
+- SR‑004 → TC‑004  
+- SR‑005 → TC‑005  
+- SR‑006 → TC‑006  
+- SR‑007 → TC‑007  
+- SR‑008 → TC‑008  
+- SR‑009 → TC‑009  
+- SR‑010 → TC‑010  
+- SR‑011 → TC‑011  
+- SR‑012 → TC‑012  
+- SR‑013 → TC‑013  
+- SR‑014 → TC‑014  
+- SR‑015 → TC‑003 / TC‑015  
+- SR‑016 → TC‑014  
+- SR‑017 → TC‑015  
+- SR‑018 → TC‑016  
+- SR‑019 → TC‑017  
+- SR‑020 → TC‑018  
+- SR‑021 → TC‑019  
+- SR‑022 → TC‑020  
+- SR‑023 → TC‑021  
+- SR‑024 → TC‑022
+
+---
+
+# 7. Summary
+
+This test plan provides:
+
+- deterministic, reproducible validation  
+- adversarial corruption testing  
+- ingestion pipeline testing  
+- reconstruction and recovery testing  
+- observability and introspection testing  
+- full SR‑xxx coverage  
+
+This is the complete, locked test plan for Bogey v1.
