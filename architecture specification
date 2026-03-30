@@ -1,0 +1,105 @@
+# Bogey Architecture Specification
+version: 1.0.0
+
+---
+
+# 1. Storage Rules
+
+1. No large files may be stored in /kaggle/working.
+2. All large downloads must be written to /kaggle/temp or other ephemeral storage.
+3. All persistent large artifacts (models, custom nodes, workflows, manifests, long‑term metadata) must reside in Kaggle datasets or Git‑backed storage.
+4. /kaggle/working is reserved for:
+   - symlinks into canonical storage
+   - runtime scratch
+   - ComfyUI workflows
+   - ComfyUI inputs
+   - ComfyUI outputs
+   - the Bogey registry
+5. Kaggle datasets are the authoritative local storage for large artifacts.
+6. Canonical upstream URLs are the authoritative source for initial canonical acquisition only. Bogey v1 does not perform update detection or update installation.
+
+---
+
+# 2. Path & Structure Rules
+
+1. All directory structures must be deterministic and single‑level.
+2. No recursive scanning for models, datasets, or artifacts.
+3. All model entry points must be explicitly declared via registry, config, or manifest.
+4. ComfyUI checkpoints must be populated via symlinks only; no direct copies of large binaries into ComfyUI directories.
+5. No component may infer structure from the filesystem; all paths must be explicit.
+6. Canonical storage lives under:
+/kaggle/input/<dataset>/comfydata/
+7. Sandbox storage lives under:
+/kaggle/working/ComfyUI/
+
+---
+
+# 3. Identity & Dataset Rules
+
+1. No hard‑coded usernames or user‑specific paths may appear in code.
+2. All dataset IDs must be constructed dynamically from environment or configuration.
+3. Local files in /kaggle/temp or /tmp are ephemeral and may be discarded at any time.
+4. Authentication tokens (Hugging Face, Kaggle, ngrok) must be stored exclusively in Kaggle Secrets, retrieved at runtime, and must never be logged, printed, or written to disk.
+5. No secrets may be committed to the repository or embedded in source files.
+
+---
+
+# 4. Registry & Model Rules
+
+1. The registry must reflect dataset‑backed reality and canonical upstream metadata, not ad‑hoc local state.
+2. The registry must contain metadata only; no large binaries may be stored in the registry.
+3. The registry must be persisted in /kaggle/working so that it survives across sessions.
+4. Each model entry must include:
+   - source_url
+   - source_type
+   - local_path
+   - local_hash
+   - dataset_id
+   - filename
+5. Canonical upstream URLs are authoritative for initial canonical acquisition only.
+6. Dataset contents must not override canonical intent without explicit versioning.
+7. No registry entry may assume /kaggle/working as a storage location for large binaries.
+8. Manager‑driven downloads must be ingested into canonical storage and reflected in the registry.
+
+---
+
+# 5. Operational Rules
+
+1. GPU‑off execution paths must exit cleanly without side effects.
+2. GPU‑on execution paths must launch ComfyUI reliably and emit a usable URL; failures must be reported clearly.
+3. When GPU is enabled, the system must attempt to establish a secure tunneling endpoint (e.g., ngrok).
+   - Tunneling failure must not prevent local ComfyUI access.
+   - All tunneling failures must be reported clearly.
+4. All failures (network, filesystem, registry, ComfyUI, tunneling) must be reported clearly; no component may fail silently.
+5. All network downloads must be explicit, logged, and hash‑verified.
+6. Bogey v1 may perform network downloads only in the following cases:
+   - Canonical Acquisition: fetching the canonical artifact from a user‑declared upstream.
+   - Manager‑Driven Downloads: ingestion of artifacts downloaded by ComfyUI‑Manager at explicit user request.
+7. Bogey v1 does not perform:
+   - update detection
+   - update installation
+   - workflow‑driven downloads
+   - dependency resolution
+   - inference‑based downloads
+   - “just make it work” behavior
+8. No code may silently change architecture assumptions (paths, storage, identity, registry schema, dataset layout) without bumping this file’s version and updating all callers’ required version.
+
+---
+
+# 6. Recovery & Reconstruction Rules
+
+1. Bogey must reconstruct the sandbox from canonical storage deterministically on every startup.
+2. Recovery must be single‑pass; a second recovery trigger indicates corruption and must activate the loop‑breaker.
+3. Canonical storage is never modified during recovery except to repair incomplete metadata.
+4. Tombstones must be respected; deleted artifacts must not be resurrected without explicit user action.
+5. Reconstruction must never infer missing canonical data; missing canonical artifacts are fatal.
+6. All recovery events must be logged in structured JSON‑lines format.
+
+---
+
+# 7. Observability & Introspection Rules
+
+1. Bogey must maintain a persistent structured log at:
+/kaggle/input/<dataset>/comfydata/logs/bogey.log
+2. Debug mode may emit logs to stdout.
+3. Bogey must expose a
