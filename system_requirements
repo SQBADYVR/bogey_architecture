@@ -1,0 +1,168 @@
+# Bogey v1 — System Requirements Specification
+version: 1.0.0  
+status: Locked
+
+---
+
+# 1. Introduction
+
+This document defines the system‑level requirements for **Bogey v1**, the deterministic, reproducible, dataset‑driven artifact lifecycle engine that succeeds **Goblin v1.0.0** and replaces the automation‑heavy behaviors of **Skunk**.
+
+Bogey’s requirements are expressed as **SR‑xxx** items and are implementation‑agnostic, testable, and drift‑proof.
+
+A lineage diagram and version‑control‑style evolution notes appear at the end of this document.
+
+---
+
+# 2. Bogey v1 System Requirements (SR‑001 → SR‑024)
+
+## SR‑001 — Deterministic Startup
+Bogey must start deterministically from canonical storage and produce the same environment on every run.
+
+## SR‑002 — Canonical/Sandbox Separation
+Canonical artifacts must reside in the dataset; the sandbox must be reconstructable and disposable.
+
+## SR‑003 — No Recursive Scanning
+Bogey must not recursively scan directories to discover models, nodes, or workflows.
+
+## SR‑004 — Explicit Artifact Declaration
+All artifacts must be explicitly declared via registry, manifest, or user‑initiated Manager download.
+
+## SR‑005 — Symlink‑Only Population
+ComfyUI directories must be populated using symlinks only; no large binaries may be copied into the sandbox.
+
+## SR‑006 — No Filesystem Inference
+Bogey must not infer meaning from filenames or directory structure; all metadata must be explicit.
+
+## SR‑007 — Registry Metadata Only
+The registry must contain metadata only, not binaries.
+
+## SR‑008 — Registry Persistence
+The registry must persist across sessions in /kaggle/working.
+
+## SR‑009 — Canonical Is Authoritative
+Canonical dataset contents are the authoritative source of truth for all artifacts.
+
+## SR‑010 — Deterministic Reconstruction
+Bogey must reconstruct the sandbox deterministically from canonical storage on every startup.
+
+## SR‑011 — No Resurrection Without Data
+Missing canonical artifacts are fatal; Bogey must not guess or recreate missing data.
+
+## SR‑012 — Tombstone Preservation
+Deleted artifacts must not be resurrected unless explicitly re‑added.
+
+## SR‑013 — Hash Verification
+Bogey must compute and verify hashes for all canonical and ingested artifacts.
+
+## SR‑014 — No Filesystem‑Driven Behavior
+Bogey must not change behavior based on what happens to be present in the sandbox.
+
+## SR‑015 — No Recursive Model Discovery
+Bogey must not search for models or nodes beyond explicitly declared paths.
+
+## SR‑016 — Single‑Pass Recovery
+Recovery must run once per startup; a second trigger indicates corruption and must activate the loop‑breaker.
+
+## SR‑017 — Structured Logging
+Bogey must emit structured JSON‑lines logs for all recovery, ingestion, and reconstruction events.
+
+## SR‑018 — Read‑Only Introspection API
+Bogey must expose a read‑only introspection interface (CLI + Python) for status, logs, diffs, and verification.
+
+## SR‑019 — Disk‑Pressure Warnings
+Bogey must emit warnings when /kaggle/working exceeds 90% (soft) and 95% (hard) of quota.
+
+## SR‑020 — Canonical Upstream Acquisition
+Bogey may download canonical artifacts from user‑declared upstreams; these downloads must be explicit, logged, and hash‑verified.
+
+## SR‑021 — Manager‑Driven Ingestion
+Bogey must ingest artifacts downloaded by ComfyUI‑Manager when initiated explicitly by the user.
+
+## SR‑022 — No Inference‑Based Acquisition
+Bogey must not perform workflow‑driven downloads, dependency resolution, or any inference‑based acquisition.
+
+## SR‑023 — No Automatic Updates
+Bogey must not detect or install updates to models or nodes.
+
+## SR‑024 — No Environment Automation
+Bogey must not install dependencies, repair environments, or bootstrap ComfyUI.
+
+---
+
+# 3. Lineage Diagram (Skunk → Goblin → Bogey)
+
+Skunk (automation, inference, auto‑download)  
+  ↓ removed automation, added determinism  
+Goblin (deterministic, no network, no magic)  
+  ↓ added explicit acquisition + observability  
+Bogey (deterministic + explicit user‑driven acquisition)
+
+---
+
+# 4. Version‑Control‑Style Evolution Notes
+
+## Skunk → Goblin Changes
+
+**Removed**
+- Auto‑download missing models  
+- Auto‑install custom nodes  
+- Workflow‑driven dependency resolution  
+- Update detection + installation  
+- Manager‑driven automation  
+- Inference‑based behavior  
+- Environment repair  
+- Automatic dataset sync  
+- Automatic cleanup  
+- Automatic workflow repair  
+
+**Added**
+- Deterministic reconstruction  
+- Canonical/sandbox separation  
+- Tombstones  
+- No resurrection  
+- No inference  
+- No network access (SR‑018)  
+- Structured logging  
+- Single‑pass recovery  
+
+---
+
+## Goblin → Bogey Changes
+
+**Dropped**
+- SR‑018 — No Network Access  
+  (Bogey now supports explicit user‑driven network acquisition)
+
+**Kept / Strengthened**
+- SR‑001 deterministic startup  
+- SR‑002 canonical/sandbox separation  
+- SR‑006 no inference  
+- SR‑010 deterministic reconstruction  
+- SR‑016 single‑pass recovery  
+- SR‑017 structured logging  
+
+**Added**
+- SR‑018 read‑only introspection API  
+- SR‑019 disk‑pressure warnings  
+- SR‑020 canonical upstream acquisition  
+- SR‑021 Manager‑driven ingestion  
+- SR‑022 no inference‑based acquisition  
+- SR‑023 no automatic updates  
+- SR‑024 no environment automation  
+
+**No other Goblin requirements were dropped.**
+
+---
+
+# 5. Summary
+
+Bogey v1:
+
+- preserves 17 of 18 Goblin requirements  
+- strengthens 6 of them  
+- drops only SR‑018 (no network access)  
+- adds new requirements for observability, safety, and explicit acquisition  
+- eliminates all Skunk‑style automation and inference  
+
+This document defines the complete, locked, testable requirements for Bogey v1.
