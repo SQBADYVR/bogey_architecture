@@ -1,12 +1,12 @@
-# Bogey v1 — System Requirements Specification
-version: 1.0.0  
+# Bogey v1.6 — System Requirements Specification
+version: 1.6.0  
 status: Locked
 
 ---
 
 # 1. Introduction
 
-This document defines the system‑level requirements for **Bogey v1**, the deterministic, reproducible, dataset‑driven artifact lifecycle engine that succeeds **Goblin v1.0.0** and replaces the automation‑heavy behaviors of **Skunk**.
+This document defines the system‑level requirements for **Bogey v1.6**, the deterministic, reproducible, dataset‑driven artifact lifecycle engine that succeeds **Goblin v1.0.0** and replaces the automation‑heavy behaviors of **Skunk**.
 
 Bogey’s requirements are expressed as **SR‑xxx** items and are implementation‑agnostic, testable, and drift‑proof.
 
@@ -14,7 +14,7 @@ A lineage diagram and version‑control‑style evolution notes appear at the en
 
 ---
 
-# 2. Bogey v1 System Requirements (SR‑001 → SR‑024)
+# 2. Bogey v1.6 System Requirements (SR‑001 → SR‑029)
 
 ## SR‑001 — Deterministic Startup
 Bogey must start deterministically from canonical storage and produce the same environment on every run.
@@ -90,13 +90,44 @@ Bogey must not install dependencies, repair environments, or bootstrap ComfyUI.
 
 ---
 
+## SR‑025 — Exposure Subsystem
+Bogey must provide an implementation‑agnostic exposure subsystem that can map a local TCP/HTTP service (`host`, `port`) to a user‑reachable URL when configured to do so.
+
+## SR‑026 — Optional Tunneling Behavior
+When GPU is enabled and an exposure mechanism is configured, Bogey must attempt to establish an external endpoint (e.g., via a tunneling service) for the ComfyUI HTTP service.
+
+- Failure to establish an external endpoint must not prevent local ComfyUI access.
+- All exposure/tunneling failures must be reported clearly and must not fail silently.
+
+## SR‑027 — Configurable Exposure Modes
+Bogey must allow the exposure behavior to be selected via configuration, with at least:
+
+- a mode that performs no external exposure (local‑only URLs), and  
+- a mode that uses an external tunneling service to provide a public URL.
+
+## SR‑028 — Secret Handling for Exposure
+Any credentials required by the exposure subsystem must:
+
+- be supplied only via environment variables or external secret stores, and  
+- never be logged, printed, or written to disk.
+
+## SR‑029 — Final Clickthrough URL Emission
+When Bogey exposes a service via the exposure subsystem, it must emit the final, user‑reachable clickthrough URL as the last line of console output after successful startup.
+
+- The URL MAY appear earlier in logs or intermediate output, but it MUST also be printed as the final line.
+- The final emission MUST be a single, machine‑parsable line.
+- No further non‑error output may follow the final URL.
+- This ordering is part of the deterministic startup contract.
+
+---
+
 # 3. Lineage Diagram (Skunk → Goblin → Bogey)
 
 Skunk (automation, inference, auto‑download)  
   ↓ removed automation, added determinism  
 Goblin (deterministic, no network, no magic)  
   ↓ added explicit acquisition + observability  
-Bogey (deterministic + explicit user‑driven acquisition)
+Bogey (deterministic + explicit user‑driven acquisition + exposure subsystem)
 
 ---
 
@@ -122,13 +153,13 @@ Bogey (deterministic + explicit user‑driven acquisition)
 - Tombstones  
 - No resurrection  
 - No inference  
-- No network access (SR‑018)  
+- No network access (SR‑018 in Goblin)  
 - Structured logging  
 - Single‑pass recovery  
 
 ---
 
-## Goblin → Bogey Changes
+## Goblin → Bogey v1.0.0 Changes
 
 **Dropped**
 - SR‑018 — No Network Access  
@@ -155,14 +186,33 @@ Bogey (deterministic + explicit user‑driven acquisition)
 
 ---
 
+## Bogey v1.0.0 → Bogey v1.6.0 Changes
+
+**Added**
+- SR‑025 exposure subsystem  
+- SR‑026 optional tunneling behavior  
+- SR‑027 configurable exposure modes  
+- SR‑028 secret handling for exposure  
+- SR‑029 deterministic final clickthrough URL emission  
+
+**Rationale**
+- Kaggle’s native port UI is unreliable and inconsistent across accounts.
+- Users require a deterministic, reproducible way to access ComfyUI.
+- Tunneling is optional but must be architecturally supported.
+- URL emission ordering must be deterministic for both humans and tooling.
+
+**No prior SRs were removed or weakened.**
+
+---
+
 # 5. Summary
 
-Bogey v1:
+Bogey v1.6:
 
-- preserves 17 of 18 Goblin requirements  
-- strengthens 6 of them  
-- drops only SR‑018 (no network access)  
-- adds new requirements for observability, safety, and explicit acquisition  
-- eliminates all Skunk‑style automation and inference  
+- preserves all Bogey v1.0.0 requirements  
+- adds a formal exposure/tunneling subsystem  
+- strengthens deterministic startup behavior  
+- clarifies secret handling  
+- defines a stable, reproducible clickthrough URL contract  
 
-This document defines the complete, locked, testable requirements for Bogey v1.
+This document defines the complete, locked, testable requirements for Bogey v1.6.
