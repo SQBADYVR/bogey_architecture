@@ -1,5 +1,5 @@
 # Bogey Architecture Specification
-version: 1.0.0
+version: 1.6.0
 
 ---
 
@@ -27,10 +27,10 @@ version: 1.0.0
 3. All model entry points must be explicitly declared via registry, config, or manifest.
 4. ComfyUI checkpoints must be populated via symlinks only; no direct copies of large binaries into ComfyUI directories.
 5. No component may infer structure from the filesystem; all paths must be explicit.
-6. Canonical storage lives under:
-/kaggle/input/<dataset>/comfydata/
-7. Sandbox storage lives under:
-/kaggle/working/ComfyUI/
+6. Canonical storage lives under:  
+   `/kaggle/input/<dataset>/comfydata/`
+7. Sandbox storage lives under:  
+   `/kaggle/working/ComfyUI/`
 
 ---
 
@@ -39,7 +39,7 @@ version: 1.0.0
 1. No hard‑coded usernames or user‑specific paths may appear in code.
 2. All dataset IDs must be constructed dynamically from environment or configuration.
 3. Local files in /kaggle/temp or /tmp are ephemeral and may be discarded at any time.
-4. Authentication tokens (Hugging Face, Kaggle, ngrok) must be stored exclusively in Kaggle Secrets, retrieved at runtime, and must never be logged, printed, or written to disk.
+4. Authentication tokens (Hugging Face, Kaggle, ngrok, or other tunneling services) must be stored exclusively in Kaggle Secrets or equivalent secret stores, retrieved at runtime, and must never be logged, printed, or written to disk.
 5. No secrets may be committed to the repository or embedded in source files.
 
 ---
@@ -66,15 +66,25 @@ version: 1.0.0
 # 5. Operational Rules
 
 1. GPU‑off execution paths must exit cleanly without side effects.
+
 2. GPU‑on execution paths must launch ComfyUI reliably and emit a usable URL; failures must be reported clearly.
-3. When GPU is enabled, the system must attempt to establish a secure tunneling endpoint (e.g., ngrok).
+   - A “usable URL” MAY be:
+     - a local URL (e.g., `http://127.0.0.1:8188`), and/or
+     - a tunneled URL provided by the exposure subsystem.
+   - Kaggle’s native “Web Interface” / port UI is best‑effort only and is NOT required for correctness.
+
+3. When GPU is enabled, the system must attempt to establish a secure tunneling endpoint via the exposure subsystem (initially ngrok).
    - Tunneling failure must not prevent local ComfyUI access.
    - All tunneling failures must be reported clearly.
+
 4. All failures (network, filesystem, registry, ComfyUI, tunneling) must be reported clearly; no component may fail silently.
+
 5. All network downloads must be explicit, logged, and hash‑verified.
+
 6. Bogey v1 may perform network downloads only in the following cases:
    - Canonical Acquisition: fetching the canonical artifact from a user‑declared upstream.
    - Manager‑Driven Downloads: ingestion of artifacts downloaded by ComfyUI‑Manager at explicit user request.
+
 7. Bogey v1 does not perform:
    - update detection
    - update installation
@@ -82,6 +92,7 @@ version: 1.0.0
    - dependency resolution
    - inference‑based downloads
    - “just make it work” behavior
+
 8. No code may silently change architecture assumptions (paths, storage, identity, registry schema, dataset layout) without bumping this file’s version and updating all callers’ required version.
 
 ---
@@ -99,7 +110,70 @@ version: 1.0.0
 
 # 7. Observability & Introspection Rules
 
-1. Bogey must maintain a persistent structured log at:
-/kaggle/input/<dataset>/comfydata/logs/bogey.log
+1. Bogey must maintain a persistent structured log at:  
+   `/kaggle/input/<dataset>/comfydata/logs/bogey.log`
 2. Debug mode may emit logs to stdout.
-3. Bogey must expose a
+3. Bogey must expose a read‑only introspection interface (CLI + Python) for status, logs, diffs, and verification, consistent with SR‑018.
+
+---
+
+# 8. Exposure Subsystem
+
+1. Bogey defines an exposure subsystem responsible for mapping a local TCP/HTTP service (`host`, `port`) to a user‑reachable URL.
+
+2. The exposure subsystem is selected via configuration (e.g., `BOGEY_EXPOSURE_MODE`) with at least:
+   - `none`: no external exposure; local URLs only.
+   - `ngrok`: tunnel‑based exposure using the ngrok service.
+
+3. The exposure subsystem is implementation‑agnostic at the architecture level; ngrok is the initial concrete implementation but may be replaced by any component that satisfies the same contract.
+
+4. The exposure subsystem must provide a single function‑level contract:
+   - Input: `service_name`, `host`, `port`
+   - Output: `public_url` (string) or a well‑defined failure
+
+5. In the Kaggle execution profile:
+   - `BOGEY_EXPOSURE_MODE` MUST default to `ngrok`.
+   - Kaggle’s native port / “Web Interface” UI MUST be treated as optional and MUST NOT be relied upon for correctness.
+
+6. The exposure subsystem MUST emit a single, machine‑parsable log line for each successfully exposed service:
+   - `BOGEY_EXPOSED_URL <service_name>=<url>`
+
+7. Secrets required by the exposure subsystem (e.g., ngrok auth token or equivalent) MUST:
+   - be provided only via environment variables or external secret stores, and
+   - never be logged, printed, or written to disk.
+
+8. The final clickthrough URL for ComfyUI (or any exposed service) MUST be emitted as the last line of console output after successful startup, in accordance with SR‑029.
+
+---
+
+# 9. Revision History (v1.0.0 → v1.6.0)
+
+**Added**
+- Formal exposure subsystem (Section 8).
+- Explicit tunneling behavior in Operational Rules (Section 5).
+- Deterministic final URL emission contract (Section 8.8).
+- Clarified that Kaggle’s native port / “Web Interface” UI is optional and non‑required (Section 5.2, 8.5).
+- Explicit mention of tunneling‑related secrets in Identity & Dataset Rules (Section 3.4).
+
+**Rationale**
+- Kaggle’s native port UI is unreliable and inconsistent across accounts and time.
+- Users require deterministic, reproducible access to ComfyUI and other HTTP services.
+- Tunneling is optional but must be architecturally supported and testable.
+- URL emission ordering must be deterministic for both humans and tooling.
+- Secret handling for tunneling must be aligned with existing token/secret rules.
+
+**No prior architecture rules were removed or weakened.**
+
+---
+
+# 10. Summary
+
+Bogey v1.6 architecture:
+
+- preserves all Bogey v1.0.0 architectural constraints,
+- adds a formal, configurable exposure subsystem,
+- defines a deterministic URL emission contract,
+- clarifies the non‑required nature of Kaggle’s native port UI,
+- remains implementation‑agnostic, deterministic, and reproducible.
+
+This document defines the complete, locked architecture for Bogey v1.6.
